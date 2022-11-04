@@ -26,7 +26,7 @@ func tcSliceType(n *ir.SliceType) ir.Node {
 ### 2. 扩容方案
 
 **[传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/slice.go#L166)**
-> 这里算法有所改动，1.之前是小于1024扩容会翻倍，现在这个值变成256，2. 大于固定值后扩容算法由之前的1.25倍换成现在的(length*768)/4
+> 这里算法有所改动，1.之前是小于1024扩容会翻倍，现在这个值变成256，2. 大于固定值后扩容算法由之前的每次1.25倍直至扩容到大于现在所需的长度变成每次增长为**(length*768)/4**直至扩容到大于现在所需的长度
 
 go1.18:
 ```go
