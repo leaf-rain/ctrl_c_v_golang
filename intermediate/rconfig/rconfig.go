@@ -32,6 +32,7 @@ var (
 		ya: {},
 	}
 	ErrParseWayNotSupported = errors.New("parse way not supported!")
+	ErrParseMapNotSupported = errors.New("parse map not supported!")
 )
 
 func NewRConfig(watcher Watcher, way string) (Rconfig, error) {
@@ -74,10 +75,7 @@ func (r *rconfig) mapDataToCache(path string) error {
 			return err
 		}
 	case ya:
-		err = Val(p.([]byte)).FormatYaml(&result)
-		if err != nil {
-			return err
-		}
+		return ErrParseMapNotSupported
 	}
 	r.cache.Store(path, result)
 	return nil
