@@ -75,7 +75,10 @@ func (r *rconfig) mapDataToCache(path string) error {
 			return err
 		}
 	case ya:
-		return ErrParseMapNotSupported
+		err = Val(p.([]byte)).FormatYaml(&result)
+		if err != nil {
+			return err
+		}
 	}
 	r.cache.Store(path, result)
 	return nil
