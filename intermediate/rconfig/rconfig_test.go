@@ -25,7 +25,7 @@ func TestNewHConfig(t *testing.T) {
 		return
 	}
 	var rconf Rconfig
-	rconf, err = NewRConfig(etcdConfig, "json")
+	rconf, err = NewRConfig(etcdConfig, "yaml")
 	if err != nil {
 		t.Error(err)
 		return

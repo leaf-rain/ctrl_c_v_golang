@@ -14,7 +14,7 @@ type Rconfig interface {
 	// MapValue 获取值(已经序列化好内容)
 	MapValue(path, key string) interface{}
 	// Map 获取值(已经序列化好内容)
-	Map(path string) map[string]interface{}
+	Map(path string) map[interface{}]interface{}
 	// Watch 监听
 	Watch()
 	// Close 关闭
@@ -66,7 +66,7 @@ func (r *rconfig) mapDataToCache(path string) error {
 		r.cache.Delete(path)
 		return nil
 	}
-	var result = make(map[string]interface{})
+	var result = make(map[interface{}]interface{})
 	var err error
 	switch r.parseWay {
 	case js:
@@ -86,10 +86,10 @@ func (r *rconfig) mapDataToCache(path string) error {
 
 func (r *rconfig) MapValue(path, key string) interface{} {
 	p, ok := r.cache.Load(path)
-	var data map[string]interface{}
+	var data map[interface{}]interface{}
 	var result interface{}
 	if ok {
-		data, ok = p.(map[string]interface{})
+		data, ok = p.(map[interface{}]interface{})
 		if ok {
 			result, ok = data[key]
 			if ok {
@@ -100,11 +100,11 @@ func (r *rconfig) MapValue(path, key string) interface{} {
 	return nil
 }
 
-func (r *rconfig) Map(path string) map[string]interface{} {
+func (r *rconfig) Map(path string) map[interface{}]interface{} {
 	p, ok := r.cache.Load(path)
-	var data map[string]interface{}
+	var data map[interface{}]interface{}
 	if ok {
-		data, ok = p.(map[string]interface{})
+		data, ok = p.(map[interface{}]interface{})
 		if ok {
 			return data
 		}
