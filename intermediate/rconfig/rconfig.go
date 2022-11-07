@@ -2,7 +2,6 @@ package rconfig
 
 import (
 	"context"
-	"errors"
 	"github.com/leaf-rain/ctrl_c_v_golang/intermediate/recuperate"
 	"log"
 	"sync"
@@ -26,19 +25,7 @@ const (
 	ya = "yaml"
 )
 
-var (
-	parse = map[string]struct{}{
-		js: {},
-		ya: {},
-	}
-	ErrParseWayNotSupported = errors.New("parse way not supported!")
-	ErrParseMapNotSupported = errors.New("parse map not supported!")
-)
-
 func NewRConfig(watcher Watcher, way string) (Rconfig, error) {
-	if _, ok := parse[way]; !ok {
-		return nil, ErrParseWayNotSupported
-	}
 	var conf = &rconfig{
 		parseWay: way,
 		watcher:  watcher,
