@@ -169,3 +169,115 @@ func maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
     appendWalkStmt(init, ir.NewUnaryExpr(base.Pos, ir.OVARKILL, tmpelem))
 ```
 当哈希表中元素数量大于25个时，编译器会创建两个数组分别存储键和值。否则会直接将所有键值对一次加入到哈希表中
+
+### 2. 写入
+[传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L578)
+```go
+// Like mapaccess, but allocates a slot for the key if it is not present in the map.
+func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
+    hash := t.hasher(key, uintptr(h.hash0))
+    
+    // Set hashWriting after calling t.hasher, since t.hasher may panic,
+    // in which case we have not actually done a write.
+    h.flags ^= hashWriting
+    
+    if h.buckets == nil {
+    h.buckets = newobject(t.bucket) // newarray(t.bucket, 1)
+    }
+    ...
+}
+```
+- 获取hash值，判断buckets是否存在，不存在则创建
+```go
+again:
+    bucket := hash & bucketMask(h.B)
+    if h.growing() {
+        growWork(t, h, bucket)
+    }
+    b := (*bmap)(add(h.buckets, bucket*uintptr(t.bucketsize)))
+    top := tophash(hash)
+	
+	var inserti *uint8
+	var insertk unsafe.Pointer
+	var elem unsafe.Pointer
+bucketloop:
+	for {
+		for i := uintptr(0); i < bucketCnt; i++ {
+			if b.tophash[i] != top {
+				if isEmpty(b.tophash[i]) && inserti == nil {
+					inserti = &b.tophash[i]
+					insertk = add(unsafe.Pointer(b), dataOffset+i*uintptr(t.keysize))
+					elem = add(unsafe.Pointer(b), dataOffset+bucketCnt*uintptr(t.keysize)+i*uintptr(t.elemsize))
+				}
+				if b.tophash[i] == emptyRest {
+					break bucketloop
+				}
+				continue
+			}
+			k := add(unsafe.Pointer(b), dataOffset+i*uintptr(t.keysize))
+			if t.indirectkey() {
+				k = *((*unsafe.Pointer)(k))
+			}
+			if !t.key.equal(key, k) {
+				continue
+			}
+			// already have a mapping for key. Update it.
+			if t.needkeyupdate() {
+				typedmemmove(t.key, k, key)
+			}
+			elem = add(unsafe.Pointer(b), dataOffset+bucketCnt*uintptr(t.keysize)+i*uintptr(t.elemsize))
+			goto done
+		}
+		ovf := b.overflow(t)
+		if ovf == nil {
+			break
+		}
+		b = ovf
+	}
+```
+**b.tophash[i] == emptyRestx**先通过tophash判断是否存在，再 **!t.key.equal(key, k)** 判断具体key的位置进行查询优化
+```go
+	// Did not find mapping for key. Allocate new cell & add entry.
+
+	// If we hit the max load factor or we have too many overflow buckets,
+	// and we're not already in the middle of growing, start growing.
+	if !h.growing() && (overLoadFactor(h.count+1, h.B) || tooManyOverflowBuckets(h.noverflow, h.B)) {
+		hashGrow(t, h)
+		goto again // Growing the table invalidates everything, so try again
+	}
+
+	if inserti == nil {
+		// The current bucket and all the overflow buckets connected to it are full, allocate a new one.
+		newb := h.newoverflow(t, b)
+		inserti = &newb.tophash[0]
+		insertk = add(unsafe.Pointer(newb), dataOffset)
+		elem = add(insertk, bucketCnt*uintptr(t.keysize))
+	}
+
+	// store new key/elem at insert position
+	if t.indirectkey() {
+		kmem := newobject(t.key)
+		*(*unsafe.Pointer)(insertk) = kmem
+		insertk = kmem
+	}
+	if t.indirectelem() {
+		vmem := newobject(t.elem)
+		*(*unsafe.Pointer)(elem) = vmem
+	}
+	typedmemmove(t.key, insertk, key)
+	*inserti = top
+	h.count++
+```
+- **!h.growing() && (overLoadFactor(h.count+1, h.B) || tooManyOverflowBuckets(h.noverflow, h.B))** 判断是否扩容
+- **if inserti == nil** 判断是否创建新桶
+- **typedmemmove(t.key, insertk, key)** 写入指针并添加写屏障避免gc
+
+### 2. todo:扩容
+[传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L657)
+
+### 2. todo:访问
+[接受一个参数传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L395)
+
+[接受两个个参数传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L456)
+- 当接受一个参数时，会使用 runtime.mapaccess1()，该函数仅会返回一个指向目标值的指针；
+- 当接受两个参数时，会使用 runtime.mapaccess2()，除了返回目标值之外，它还会返回一个用于表示当前键对应的值是否存在的 bool 值：
