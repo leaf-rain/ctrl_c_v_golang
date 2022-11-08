@@ -168,7 +168,7 @@ func maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
     appendWalkStmt(init, ir.NewUnaryExpr(base.Pos, ir.OVARKILL, tmpkey))
     appendWalkStmt(init, ir.NewUnaryExpr(base.Pos, ir.OVARKILL, tmpelem))
 ```
-当哈希表中元素数量大于25个时，编译器会创建两个数组分别存储键和值。否则会直接将所有键值对一次加入到哈希表中
+**当哈希表中元素数量大于25个时，编译器会创建两个数组分别存储键和值。否则会直接将所有键值对一次加入到哈希表中**
 
 ### 2. 写入
 [传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L578)
@@ -274,6 +274,94 @@ bucketloop:
 
 ### 2. todo:扩容
 [传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L657)
+```go
+func hashGrow(t *maptype, h *hmap) {
+	// If we've hit the load factor, get bigger.
+	// Otherwise, there are too many overflow buckets,
+	// so keep the same number of buckets and "grow" laterally.
+	bigger := uint8(1)
+	if !overLoadFactor(h.count+1, h.B) {
+        // 如果达到条件 1，那么将B值加1，相当于是原来的2倍
+        // 否则对应条件 2，进行等量扩容，所以 B 不变
+		bigger = 0
+		h.flags |= sameSizeGrow
+	}
+	oldbuckets := h.buckets
+	// 申请新的buckets空间
+	newbuckets, nextOverflow := makeBucketArray(t, h.B+bigger, nil)
+
+	flags := h.flags &^ (iterator | oldIterator)
+	if h.flags&iterator != 0 {
+		flags |= oldIterator
+	}
+	// commit the grow (atomic wrt gc)
+	h.B += bigger
+	h.flags = flags
+	h.oldbuckets = oldbuckets
+	h.buckets = newbuckets
+    // 搬迁进度为0
+	h.nevacuate = 0
+    // overflow buckets 数为0
+	h.noverflow = 0
+
+	if h.extra != nil && h.extra.overflow != nil {
+		// Promote current overflow buckets to the old generation.
+		if h.extra.oldoverflow != nil {
+			throw("oldoverflow is not nil")
+		}
+		h.extra.oldoverflow = h.extra.overflow
+		h.extra.overflow = nil
+	}
+	if nextOverflow != nil {
+		if h.extra == nil {
+			h.extra = new(mapextra)
+		}
+		h.extra.nextOverflow = nextOverflow
+	}
+
+	// the actual copying of the hash table data is done incrementally
+	// by growWork() and evacuate().
+}
+
+// overLoadFactor reports whether count items placed in 1<<B buckets is over loadFactor.
+func overLoadFactor(count int, B uint8) bool {
+	return count > bucketCnt && uintptr(count) > loadFactorNum*(bucketShift(B)/loadFactorDen)
+}
+
+// tooManyOverflowBuckets reports whether noverflow buckets is too many for a map with 1<<B buckets.
+// Note that most of these overflow buckets must be in sparse use;
+// if use was dense, then we'd have already triggered regular map growth.
+func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
+	// If the threshold is too low, we do extraneous work.
+	// If the threshold is too high, maps that grow and shrink can hold on to lots of unused memory.
+	// "too many" means (approximately) as many overflow buckets as regular buckets.
+	// See incrnoverflow for more details.
+	if B > 15 {
+		B = 15
+	}
+	// The compiler doesn't see here that B < 16; mask B to generate shorter shift code.
+	return noverflow >= uint16(1)<<(B&15)
+}
+
+func growWork(t *maptype, h *hmap, bucket uintptr) {
+    // 为了确认搬迁的 bucket 是我们正在使用的 bucket
+    // 即如果当前key映射到老的bucket1，那么就搬迁该bucket1。
+    evacuate(t, h, bucket&h.oldbucketmask())
+    
+    // 如果还未完成扩容工作，则再搬迁一个bucket。
+    if h.growing() {
+    evacuate(t, h, h.nevacuate)
+    }
+}
+
+```
+触发条件：
+1. 装载因子超过6.5(overLoadFactor 每次装载达到最大都会+1)
+2. 过多的溢出桶(tooManyOverflowBuckets 根据当前的装载因子，扩容的最大装载因子不超过15)
+
+因为如果对map不断的增删会造成overflow的bucket数量增多，但是负载因子并不高。针对上面两种情况所以有两种扩容方式：
+- **增量扩容** ：对 1，将 B + 1，新建一个buckets数组，新的buckets大小是原来的2倍，然后旧buckets数据搬迁到新的buckets。
+- **等量扩容** : 针对 2，并不扩大容量，buckets数量维持不变，重新做一遍类似增量扩容的搬迁动作，把松散的键值对重新排列一次，以使bucket的使用率更高，进而保证更快的存取。
 
 ### 2. todo:访问
 [接受一个参数传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/runtime/map.go#L395)
