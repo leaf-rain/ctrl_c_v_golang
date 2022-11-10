@@ -11,3 +11,6 @@ ctrl c/v永不过时 ！！！好用请给star。
 [emoji](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/emoji) 带有表情的昵称加密
 
 [putFile](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/putFile) 字符串输出到文件(go文件fmt)
+
+[goFileAnalysis](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/goFileAnalysis) 解析go文件，
+写了两个简单方法，用作示例，不过不知道为什么，我找不到package再哪里，有大佬指点一下吗？
