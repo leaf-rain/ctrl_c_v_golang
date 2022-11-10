@@ -9,3 +9,5 @@ ctrl c/v永不过时 ！！！好用请给star。
 ### 目录
 
 [emoji](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/emoji) 带有表情的昵称加密
+
+[putFile](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/putFile) 字符串输出到文件(go文件fmt)
