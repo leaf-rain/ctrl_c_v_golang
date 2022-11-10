@@ -17,3 +17,6 @@ ctrl c/v永不过时 ！！！好用请给star。
 
 [jsToStruct](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/jsToStruct) 
 自动读取json生成golang结构体并且生成监听文件变化方法，用于游戏读取本地文件配置(远程可以使用[etcd配置中心](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/intermediate/rconfig))
+
+[translation](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/translation) 
+翻译封装，可以通过多配置文件返回给前端不同语言
