@@ -14,3 +14,6 @@ ctrl c/v永不过时 ！！！好用请给star。
 
 [goFileAnalysis](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/goFileAnalysis) 解析go文件，
 写了两个简单方法，用作示例，不过不知道为什么，我找不到package再哪里，有大佬指点一下吗？
+
+[jsToStruct](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/beginner/string/jsToStruct) 
+自动读取json生成golang结构体并且生成监听文件变化方法，用于游戏读取本地文件配置(远程可以使用[etcd配置中心](https://github.com/leaf-rain/ctrl_c_v_golang/tree/main/intermediate/rconfig))
