@@ -287,22 +287,58 @@ func (c *timerCtx) cancel(removeFromParent bool, err error) {
 // struct{}. Alternatively, exported context key variables' static
 // type should be a pointer or interface.
 func WithValue(parent Context, key, val any) Context {
-	if parent == nil {
+	if parent == nil { // 判断父节点
 		panic("cannot create context from nil parent")
 	}
-	if key == nil {
+	if key == nil { // 判断key
 		panic("nil key")
 	}
 	if !reflectlite.TypeOf(key).Comparable() {
 		panic("key is not comparable")
 	}
-	return &valueCtx{parent, key, val}
+	return &valueCtx{parent, key, val} // 返回新context
 }
 
 // A valueCtx carries a key-value pair. It implements Value for that key and
 // delegates all other calls to the embedded Context.
-type valueCtx struct {
+type valueCtx struct {  // 也就是说，一个valueCtx只存了一对k v
 	Context
 	key, val any
+}
+
+func (c *valueCtx) Value(key any) any { // 查找key
+    if c.key == key { // 如果当前valueCtx存的key是要查找的key就直接返回值
+        return c.val
+    }
+    return value(c.Context, key) // 调用value方法查询父节点的key
+}
+
+// &cancelCtxKey is the key that a cancelCtx returns itself for.
+var cancelCtxKey int
+
+func value(c Context, key any) any {
+    for { // 循环遍历当前子节点上面的所有父节点，知道查找不到返回nil
+        switch ctx := c.(type) {
+        case *valueCtx: // 父节点类型是valueCtx
+            if key == ctx.key { // 父节点如果查到对应kv，返回
+                return ctx.val
+            }
+            c = ctx.Context // 如果不是对应kv，修改c为更上一层父节点，再次循环查询
+        case *cancelCtx:
+            if key == &cancelCtxKey { // 如果是key是获取当前ctx的cancelCtx的key
+                return c // 返回cancelCtx用于调用cancel方法
+            }
+            c = ctx.Context // 如果不是对应kv，修改c为更上一层父节点，再次循环查询
+        case *timerCtx:
+            if key == &cancelCtxKey { // 如果是key是获取当前ctx的cancelCtx的key
+                return &ctx.cancelCtx // 返回cancelCtx用于调用cancel方法
+            }
+            c = ctx.Context // 如果不是对应kv，修改c为更上一层父节点，再次循环查询
+        case *emptyCtx: // 没有更上一层父节点了，返回Nil
+            return nil
+        default: // 如果是用户自定义context
+            return c.Value(key) // 返回用户自定义Value方法
+        }
+    }
 }
 ```
