@@ -3,9 +3,9 @@
 ***
 ctrl c/v永不过时 ！！！好用请给star。
 
-> > 别的不说：先点先学：[菜鸟教程](https://www.runoob.com/go/go-arrays.html)
+> 别的不说：先点先学：[菜鸟教程](https://www.runoob.com/go/go-arrays.html)
 
-emmm~,在项目中用的一般比较少，一般我都是用常亮里面用来限制长度
+emmm~,在项目中用的一般比较少，一般我都是用常量里面用来限制长度
 
 ### 1. 编译器优化：
 **[传送门](https://github.com/golang/go/blob/dev.boringcrypto.go1.18/src/cmd/compile/internal/walk/complit.go#L553)**
