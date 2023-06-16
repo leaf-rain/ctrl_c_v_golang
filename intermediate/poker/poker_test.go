@@ -19,7 +19,8 @@ func Test_Poker(t *testing.T) {
 	var c1 = []int64{152, 31, 32, 33}
 	feature := p.GetCardsFeature(c1, 0)
 	t.Log(feature)
-	var cards = []int64{51, 52, 53, 54}
+	p.SetLaizi([]int64{8, 15})
+	var cards = []int64{31, 32, 33, 34, 43, 51, 61, 71, 81, 82, 83, 84, 93, 104, 123}
 	result := p.HintCardCombo(cards, feature)
 	t.Log(result)
 }

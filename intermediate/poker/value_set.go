@@ -8,6 +8,27 @@ type valueSet struct {
 	isLaizi bool
 }
 
+func cardsToValueMap(cards []*Card) (map[int64]*valueSet, int64) {
+	var laiziCount int64
+	var timesSet = make(map[int64]*valueSet)
+	var isExists bool
+	for i := range cards {
+		if cards[i].IsLaizi {
+			laiziCount += 1
+		}
+		if _, isExists = timesSet[cards[i].Value]; !isExists {
+			timesSet[cards[i].Value] = &valueSet{
+				value:   cards[i].Value,
+				times:   1,
+				isLaizi: cards[i].IsLaizi,
+			}
+		} else {
+			timesSet[cards[i].Value].times += 1
+		}
+	}
+	return timesSet, laiziCount
+}
+
 func cardsToValueSet(cards []*Card) ([]*valueSet, int64) {
 	var laiziCount int64
 	var timesSet []*valueSet

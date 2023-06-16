@@ -1,5 +1,7 @@
 package poker
 
+import "github.com/zeromicro/go-zero/core/logx"
+
 const (
 	LastUnConf int64 = -100 // 上家出牌不符合（游戏bug）
 	Less       int64 = -1   // 出牌比上家小
@@ -18,6 +20,7 @@ const (
 // comboType: 牌的类型
 // return: 牌型特征值
 func (p *Poker) GetCardsFeature(nCards []int64, comboType int64) int64 {
+	logx.Debugf("[GetCardsFeature] (%v, %v), laizi:%+v", nCards, comboType, p.laizi)
 	var length = len(nCards)
 	cards := p.NumToCard(nCards)
 	if comboType != 0 {
@@ -67,6 +70,9 @@ func (p *Poker) GetCardsFeature(nCards []int64, comboType int64) int64 {
 		if cardType, section, cardValue, fix = p.isBomb(cards); cardType != 0 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
+		if cardType, section, cardValue, fix = p.isFourWithTwoSingle(cards); cardType != 0 {
+			return p.EncodeFeature(cardType, int(section), cardValue, fix)
+		}
 		if cardType, section, cardValue, fix = p.isTrioStraight(cards); cardType != 0 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
@@ -76,14 +82,14 @@ func (p *Poker) GetCardsFeature(nCards []int64, comboType int64) int64 {
 		if cardType, section, cardValue, fix = p.isSingleStraight(cards); cardType != 0 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
-		if cardType, section, cardValue, fix = p.isFourWithTwoSingle(cards); cardType != 0 {
-			return p.EncodeFeature(cardType, int(section), cardValue, fix)
-		}
 	case 8: // 八张牌出现的情况： 炸弹、四带2对、飞机不带、连队、顺子
 		if cardType, section, cardValue, fix = p.isJokePair(cards); cardType != 0 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
 		if cardType, section, cardValue, fix = p.isBomb(cards); cardType != 0 {
+			return p.EncodeFeature(cardType, int(section), cardValue, fix)
+		}
+		if cardType, section, cardValue, fix = p.isFourWithTwoPair(cards); cardType != 0 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
 		if cardType, section, cardValue, fix = p.isTrioStraightWithSingle(cards); cardType != 0 {
@@ -93,9 +99,6 @@ func (p *Poker) GetCardsFeature(nCards []int64, comboType int64) int64 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
 		if cardType, section, cardValue, fix = p.isSingleStraight(cards); cardType != 0 {
-			return p.EncodeFeature(cardType, int(section), cardValue, fix)
-		}
-		if cardType, section, cardValue, fix = p.isFourWithTwoPair(cards); cardType != 0 {
 			return p.EncodeFeature(cardType, int(section), cardValue, fix)
 		}
 	default:

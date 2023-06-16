@@ -3,21 +3,21 @@ package poker
 import "sync"
 
 const (
-	there      = 3
-	four       = 4
-	five       = 5
-	six        = 6
-	seven      = 7
-	eight      = 8
-	nine       = 9
-	ten        = 10
-	jack       = 11
-	queen      = 12
-	king       = 13
-	ace        = 14
-	two        = 15
-	littleKing = 16
-	bigKing    = 17
+	there      int64 = 3
+	four       int64 = 4
+	five       int64 = 5
+	six        int64 = 6
+	seven      int64 = 7
+	eight      int64 = 8
+	nine       int64 = 9
+	ten        int64 = 10
+	jack       int64 = 11
+	queen      int64 = 12
+	king       int64 = 13
+	ace        int64 = 14
+	two        int64 = 15
+	littleKing int64 = 16
+	bigKing    int64 = 17
 )
 
 type Poker struct {

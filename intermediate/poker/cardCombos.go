@@ -38,6 +38,14 @@ func (p *Poker) HintCardCombo(numCards []int64, feature int64) *CardCombo {
 	var cards = p.NumToCard(numCards)
 	p.SortCards(cards)
 	if feature == 0 { // 没有比较牌，自己出牌，优先出数量比较大的牌
+		// 是否可以一手出完
+		p.UnUse(cards)
+		if newFeature := p.GetCardsFeature(numCards, 0); newFeature != 0 {
+			return &CardCombo{
+				Feature: newFeature,
+				Cards:   numCards,
+			}
+		}
 		// 飞机带对
 		p.UnUse(cards)
 		rs := p.GetMinTrioStraightWithPair(cards, feature, false, true, true)
@@ -120,7 +128,7 @@ func (p *Poker) HintCardCombo(numCards []int64, feature int64) *CardCombo {
 
 		// 对子
 		p.UnUse(cards)
-		rs = p.GetMinOnePair(cards, feature, true, true, true)
+		rs = p.GetMinOnePair(cards, feature, false, true, true)
 		if rs != nil {
 			return &CardCombo{
 				Feature: rs.Feature,
@@ -130,7 +138,7 @@ func (p *Poker) HintCardCombo(numCards []int64, feature int64) *CardCombo {
 
 		// 单张
 		p.UnUse(cards)
-		rs = p.GetMinSingle(cards, feature, false, true, true)
+		rs = p.GetMinSingle(cards, feature, true, true, true)
 		if rs != nil {
 			return &CardCombo{
 				Feature: rs.Feature,
@@ -227,43 +235,79 @@ func (p *Poker) GetMinBomb(cards []*Card, feature int64, isJoker bool) *cardComb
 	valueSetSort(vs) // 按照次数排序
 	var cardType, section, cardValue, fix int64
 	var newFeature int64
-	var _, tmpSection, _, _ = p.DecodeFeature(feature)
-
+	var tmpTy, tmpSection, tmpValue, _ = p.DecodeFeature(feature)
+	if tmpSection == 0 { // 最少需要4张牌
+		tmpSection = 4
+	}
+	if tmpTy != Bomb {
+		tmpSection = 4
+		tmpValue = 0
+	}
+	var tmpLaiziCount int64
+	var needLaizi int64
+	var result *cardCombo
 	for i := len(vs) - 1; i >= 0; i-- {
-		if vs[i].isLaizi || vs[i].times >= int64(tmpSection) || (vs[i].value >= littleKing && vs[i].times > 1) { // 不用癞子和不拆炸弹
+		if vs[i].isLaizi || vs[i].value >= littleKing { // 不用癞子和不拆炸弹
 			continue
 		}
+		tmpLaiziCount = laiziCount
+		needLaizi = 0
+		if vs[i].isLaizi {
+			laiziCount -= vs[i].value
+		}
+		if vs[i].times < int64(tmpSection) {
+			needLaizi = int64(tmpSection) - vs[i].times
+			if vs[i].value < tmpValue {
+				needLaizi += 1
+			}
+			if tmpLaiziCount < needLaizi { // 癞子数量不够
+				continue
+			}
+		}
+		if needLaizi == 0 && vs[i].value <= tmpValue {
+			needLaizi += 1
+		}
 		var bombCards []*Card
-		if vs[i].times+laiziCount >= int64(tmpSection) {
-			bombCards = append(bombCards, p.GetCards(cards, vs[i].value, 0)...)
-			bombCards = append(bombCards, p.GetCardsForLaizi(cards, int64(tmpSection)-vs[i].times)...)
-			cardType, section, cardValue, fix = p.isBomb(bombCards)
-			newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-			if p.CompareFeature(newFeature, feature) == Greater {
-				return &cardCombo{
+		bombCards = append(bombCards, p.GetCards(cards, vs[i].value, 0)...)
+		bombCards = append(bombCards, p.GetCardsForLaizi(cards, needLaizi)...)
+		cardType, section, cardValue, fix = p.isBomb(bombCards)
+		newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
+		if p.CompareFeature(newFeature, feature) == Greater {
+			if result == nil {
+				result = &cardCombo{
 					Feature: newFeature,
 					Cards:   bombCards,
 				}
-			}
-		}
-	}
-	// 使用硬炸
-	for i := len(vs) - 1; i >= 0; i-- {
-		if vs[i].times < int64(tmpSection) || (vs[i].value >= littleKing && vs[i].times > 1) { // 不用癞子和不拆炸弹
-			continue
-		}
-		if vs[i].times >= int64(tmpSection) {
-			var outCards = p.GetCards(cards, vs[i].value, 0)
-			cardType, section, cardValue, fix = p.isBomb(outCards)
-			newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-			if p.CompareFeature(newFeature, feature) == Greater {
-				return &cardCombo{
-					Feature: newFeature,
-					Cards:   outCards,
+			} else {
+				if p.CompareFeature(newFeature, result.Feature) == Less { // 取最小的炸弹
+					result = &cardCombo{
+						Feature: newFeature,
+						Cards:   bombCards,
+					}
 				}
 			}
 		}
 	}
+	if result != nil {
+		return result
+	}
+	// 使用硬炸
+	//for i := len(vs) - 1; i >= 0; i-- {
+	//	if vs[i].times < int64(tmpSection) || (vs[i].value >= littleKing && vs[i].times > 1) { // 不用癞子和不拆炸弹
+	//		continue
+	//	}
+	//	if vs[i].times >= int64(tmpSection) {
+	//		var outCards = p.GetCards(cards, vs[i].value, 0)
+	//		cardType, section, cardValue, fix = p.isBomb(outCards)
+	//		newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
+	//		if p.CompareFeature(newFeature, feature) == Greater {
+	//			return &cardCombo{
+	//				Feature: newFeature,
+	//				Cards:   outCards,
+	//			}
+	//		}
+	//	}
+	//}
 	// 使用王炸
 	if isJoker {
 		var bombs = p.GetCards(cards, littleKing, 0)
@@ -317,6 +361,7 @@ func (p *Poker) GetMinSingle(cards []*Card, feature int64, bomb, divide, laizi b
 	valueSetSort(vs) // 按照次数排序
 	// 拆牌
 	if divide {
+		p.UnUse(cards)
 		for i := len(vs) - 1; i >= 0; i-- {
 			if vs[i].isLaizi || vs[i].times >= 4 || (vs[i].value >= littleKing && vs[i].times > 1) || (haveJoker && vs[i].value >= littleKing) { // 不用癞子和不拆炸弹
 				continue
@@ -341,6 +386,7 @@ func (p *Poker) GetMinSingle(cards []*Card, feature int64, bomb, divide, laizi b
 	}
 	// 使用癞子
 	if laizi && laiziCount > 0 {
+		p.UnUse(cards)
 		for i := len(vs) - 1; i >= 0; i-- {
 			if vs[i].isLaizi || (haveJoker && vs[i].value >= littleKing) {
 				var tmpCard = p.CardBinarySearch(cards, vs[i].value)
@@ -388,9 +434,6 @@ func (p *Poker) GetMinOnePair(cards []*Card, feature int64, bomb, divide, laizi 
 		}
 		if vs[i].times == 2 {
 			tmpCards = p.GetCards(cards, vs[i].value, 0)
-			if p.IsUse(tmpCards) {
-				continue
-			}
 			cardType, section, cardValue, fix = p.isOnePair(tmpCards)
 			if cardType != 0 {
 				newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
@@ -409,15 +452,13 @@ func (p *Poker) GetMinOnePair(cards []*Card, feature int64, bomb, divide, laizi 
 	valueSetSort(vs) // 按照次数排序
 	// 拆牌
 	if divide {
+		p.UnUse(cards)
 		for i := len(vs) - 1; i >= 0; i-- {
 			if vs[i].isLaizi || vs[i].times >= 4 || (vs[i].value >= littleKing && vs[i].times > 1) || (haveJoker && vs[i].value >= littleKing) { // 不用癞子和不拆炸弹
 				continue
 			}
 			if vs[i].times > 2 {
-				tmpCards = p.GetCards(cards, vs[i].value, 0)
-				if p.IsUse(tmpCards) {
-					continue
-				}
+				tmpCards = p.GetCards(cards, vs[i].value, 2)
 				cardType, section, cardValue, fix = p.isOnePair(tmpCards)
 				if cardType != 0 {
 					newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
@@ -436,6 +477,7 @@ func (p *Poker) GetMinOnePair(cards []*Card, feature int64, bomb, divide, laizi 
 	}
 	// 使用癞子
 	if laizi && laiziCount > 0 {
+		p.UnUse(cards)
 		var result *cardCombo
 		var needLaizi int64 = 3 // 给默认值
 		for i := len(vs) - 1; i >= 0; i-- {
@@ -496,9 +538,6 @@ func (p *Poker) GetMinTrio(cards []*Card, feature int64, bomb, divide, laizi boo
 		}
 		if vs[i].times == 3 {
 			tmpCards = p.GetCards(cards, vs[i].value, 0)
-			if p.IsUse(tmpCards) {
-				continue
-			}
 			cardType, section, cardValue, fix = p.isTrio(tmpCards)
 			if cardType != 0 {
 				newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
@@ -520,6 +559,7 @@ func (p *Poker) GetMinTrio(cards []*Card, feature int64, bomb, divide, laizi boo
 
 	// 使用癞子
 	if laizi && laiziCount > 0 {
+		p.UnUse(cards)
 		var result *cardCombo
 		var needLaizi int64 = 4 // 给默认值
 		for i := len(vs) - 1; i >= 0; i-- {
@@ -595,6 +635,7 @@ func (p *Poker) GetMinTrioWithSingle(cards []*Card, feature int64, bomb, divide,
 
 	// divide 拆牌，但是不拆炸弹
 	if divide {
+		p.UnUse(cards)
 		trio = p.GetMinTrio(cards, tmpValue, false, true, false)
 		single = p.GetMinSingle(cards, 0, false, true, false)
 		if trio != nil && single != nil {
@@ -615,6 +656,7 @@ func (p *Poker) GetMinTrioWithSingle(cards []*Card, feature int64, bomb, divide,
 
 	// 使用癞子
 	if laizi {
+		p.UnUse(cards)
 		trio = p.GetMinTrio(cards, tmpValue, false, false, true)
 		single = p.GetMinSingle(cards, 0, false, false, true)
 		if trio != nil && single != nil {
@@ -673,6 +715,7 @@ func (p *Poker) GetMinTrioWithPair(cards []*Card, feature int64, bomb, divide, l
 
 	// divide 拆牌，但是不拆炸弹
 	if divide {
+		p.UnUse(cards)
 		trio = p.GetMinTrio(cards, tmpValue, false, true, false)
 		tmp = p.GetMinOnePair(cards, 0, false, true, false)
 		if trio != nil && tmp != nil {
@@ -693,6 +736,7 @@ func (p *Poker) GetMinTrioWithPair(cards []*Card, feature int64, bomb, divide, l
 
 	// 使用癞子
 	if laizi {
+		p.UnUse(cards)
 		trio = p.GetMinTrio(cards, tmpValue, false, false, true)
 		tmp = p.GetMinOnePair(cards, 0, false, false, true)
 		if trio != nil && tmp != nil {
@@ -725,44 +769,76 @@ func (p *Poker) GetMinTrioWithPair(cards []*Card, feature int64, bomb, divide, l
 // feature: 调用传入的特征值
 // bomb:是否使用炸弹，divide:是否拆牌,laizi:是否使用癞子
 func (p *Poker) GetMinSingleStraight(cards []*Card, feature int64, bomb, divide, laizi bool) *cardCombo {
-	vs, laiziCount, _ := cardsToValueSetOnLaizi(cards)
-	var cardType, section, cardValue, fix int64
+	if len(cards) < 5 {
+		return nil
+	}
 	var newFeature int64
 	var tmpCards []*Card
 	// 分解特征值
 	var _, baseSection, baseValue, _ = p.DecodeFeature(feature)
 	if baseSection == 0 {
-		baseSection = len(cards)
+		baseSection = 5
 	}
-	var flag bool
-	// 不用癞子,不拆牌
-	for i := len(vs) - 1; i >= 0; i-- {
-		p.UnUse(cards)
-		if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值,不能接2以上
-			continue
+	if baseValue == 0 {
+		baseValue = there
+	}
+	if len(cards) < baseSection {
+		return nil
+	}
+	m, laiziCount := cardsToValueMap(cards)
+	var ok bool
+	var ok2 bool
+	var result *cardCombo
+	var lastLaiziCount int64
+	for i := ace; i > baseValue-int64(baseSection)+2; i-- {
+		var tmpLaiziCount int64 = 0
+		if laizi {
+			tmpLaiziCount = laiziCount
 		}
-		flag = true
-		tmpCards = nil
-		if vs[i].times == 1 && i+baseSection < len(vs) {
-			for i1 := i - 1; i1 > i-baseSection && i1 >= 1 && vs[i1].times == 1 && !vs[i1].isLaizi; i1-- {
-				if vs[i1].value != vs[i1-1].value+1 || vs[i1].value >= two {
-					flag = false
+		tmpCards = make([]*Card, 0)
+		if _, ok = m[i]; ok {
+			tmpCards = append(tmpCards, p.GetCards(cards, i, 1)...)
+			if m[i].isLaizi {
+				tmpLaiziCount--
+			}
+		} else {
+			tmpLaiziCount--
+			if tmpLaiziCount < 0 {
+				continue
+			}
+			tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 1)...)
+		}
+		for i2 := 1; i2 < baseSection; i2++ {
+			if _, ok2 = m[i-int64(i2)]; ok2 {
+				tmpCards = append(tmpCards, p.GetCards(cards, i-int64(i2), 1)...)
+				if ok && m[i-int64(i2)].isLaizi {
+					tmpLaiziCount--
+					if tmpLaiziCount < 0 {
+						break
+					}
+				}
+			} else {
+				tmpLaiziCount--
+				if tmpLaiziCount < 0 {
 					break
 				}
-				tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 1)...)
+				tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 1)...)
 			}
-			if (flag && len(tmpCards) == baseSection) || (feature == 0 && len(tmpCards) >= 5) {
-				if p.IsUse(tmpCards) {
-					continue
-				}
-				cardType, section, cardValue, fix = p.isSingleStraight(tmpCards)
-				if cardType != 0 {
-					newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
+			if i2 == baseSection-1 && len(tmpCards) == baseSection {
+				cardType, section, cardValue, fix := p.isSingleStraight(tmpCards)
+				newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
+				if result == nil {
 					if p.CompareFeature(newFeature, feature) == Greater {
-						for i1 := range tmpCards {
-							tmpCards[i1].IsUse = true
+						lastLaiziCount = laiziCount - tmpLaiziCount
+						result = &cardCombo{
+							Feature: newFeature,
+							Cards:   tmpCards,
 						}
-						return &cardCombo{
+					}
+				} else {
+					if p.CompareFeature(newFeature, feature) == Greater && p.CompareFeature(newFeature, result.Feature) == Less && lastLaiziCount >= laiziCount-tmpLaiziCount {
+						lastLaiziCount = laiziCount - tmpLaiziCount
+						result = &cardCombo{
 							Feature: newFeature,
 							Cards:   tmpCards,
 						}
@@ -771,94 +847,12 @@ func (p *Poker) GetMinSingleStraight(cards []*Card, feature int64, bomb, divide,
 			}
 		}
 	}
-	// 拆牌但是不拆炸弹和不使用癞子
-	if divide {
-		for i := len(vs) - 1; i >= 0; i-- {
-			p.UnUse(cards)
-			if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值
-				continue
-			}
-			flag = true
-			tmpCards = nil
-			if vs[i].times < 4 && i+baseSection < len(vs) {
-				for i1 := i - 1; i1 > i-baseSection && i1 >= 1 && vs[i1].times < 4 && !vs[i1].isLaizi; i1-- {
-					if vs[i1].value != vs[i1-1].value+1 || vs[i1].value >= two {
-						flag = false
-						break
-					}
-					tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 1)...)
-				}
-				if (flag && len(tmpCards) == baseSection) || (feature == 0 && len(tmpCards) >= 5) {
-					if p.IsUse(tmpCards) {
-						continue
-					}
-					cardType, section, cardValue, fix = p.isSingleStraight(tmpCards)
-					if cardType != 0 {
-						newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-						if p.CompareFeature(newFeature, feature) == Greater {
-							for i1 := range tmpCards {
-								tmpCards[i1].IsUse = true
-							}
-							return &cardCombo{
-								Feature: newFeature,
-								Cards:   tmpCards,
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	// 使用癞子
-	if laizi {
-		var tmpLaiziCount = laiziCount
-		for i := len(vs) - 1; i >= 0; i-- {
-			p.UnUse(cards)
-			if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值
-				continue
-			}
-			flag = true
-			tmpCards = nil
-			if vs[i].times < 4 {
-				for i1 := i - 1; i1 > i-baseSection && i1 >= 1 && vs[i1].times < 4 && !vs[i1].isLaizi && tmpLaiziCount >= 0; i1-- {
-					if i1 < len(vs) && vs[i1].value < two && vs[i1].value == vs[i1-1].value+1 {
-						tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 1)...)
-					} else {
-						if tmpLaiziCount < 1 {
-							break
-						}
-						tmpLaiziCount--
-						i1++ // 再判断一次
-					}
-				}
-				tmpCards = append(tmpCards, p.GetMinLaizi(cards, laiziCount-tmpLaiziCount)...)
-				if (flag && len(tmpCards) == baseSection) || (feature == 0 && len(tmpCards) >= 5) {
-					if p.IsUse(tmpCards) {
-						continue
-					}
-					if laiziCount-tmpLaiziCount >= 4 { // 使用癞子足够当炸弹使用了
-						continue
-					}
-					cardType, section, cardValue, fix = p.isSingleStraight(tmpCards)
-					if cardType != 0 {
-						newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-						if p.CompareFeature(newFeature, feature) == Greater {
-							for i1 := range tmpCards {
-								tmpCards[i1].IsUse = true
-							}
-							return &cardCombo{
-								Feature: newFeature,
-								Cards:   tmpCards,
-							}
-						}
-					}
-				}
-			}
-		}
+	if result != nil {
+		return result
 	}
 	// 使用炸弹
 	if bomb {
-		if result := p.GetMinBomb(cards, feature, true); result != nil {
+		if result = p.GetMinBomb(cards, feature, true); result != nil {
 			return result
 		}
 	}
@@ -870,44 +864,101 @@ func (p *Poker) GetMinSingleStraight(cards []*Card, feature int64, bomb, divide,
 // feature: 调用传入的特征值
 // bomb:是否使用炸弹，divide:是否拆牌,laizi:是否使用癞子
 func (p *Poker) GetMinPairStraight(cards []*Card, feature int64, bomb, divide, laizi bool) *cardCombo {
-	vs, laiziCount, _ := cardsToValueSetOnLaizi(cards)
-	var cardType, section, cardValue, fix int64
+	if len(cards) < 6 {
+		return nil
+	}
 	var newFeature int64
 	var tmpCards []*Card
 	// 分解特征值
 	var _, baseSection, baseValue, _ = p.DecodeFeature(feature)
 	if baseSection == 0 {
-		baseSection = len(cards) / 2
+		baseSection = 3
 	}
-	var flag bool
-	// 不用癞子,不拆牌
-	for i := len(vs) - 1; i >= 0; i-- {
+	if baseValue == 0 {
+		baseValue = there
+	}
+	if len(cards) < baseSection {
+		return nil
+	}
+	m, laiziCount := cardsToValueMap(cards)
+	var ok bool
+	var ok2 bool
+	var result *cardCombo
+	var tmpLength int
+	var lastLaiziCount int64
+	for i := ace; i > baseValue-int64(baseSection)+2; i-- {
 		p.UnUse(cards)
-		if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值,不能接2以上
-			continue
+		var tmpLaiziCount int64 = 0
+		if laizi {
+			tmpLaiziCount = laiziCount
 		}
-		flag = true
-		tmpCards = nil
-		if vs[i].times == 2 && i+baseSection < len(vs) {
-			for i1 := i - 1; i1 > i-baseSection && i1 >= 1 && vs[i1].times == 1 && !vs[i1].isLaizi; i1-- {
-				if vs[i1].value != vs[i1-1].value+1 || vs[i1].value >= two {
-					flag = false
-					break
-				}
-				tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 2)...)
-			}
-			if (flag && len(tmpCards) == baseSection) || (feature == 0 && len(tmpCards) >= 6) {
-				if p.IsUse(tmpCards) {
+		tmpCards = make([]*Card, 0)
+		if _, ok = m[i]; ok {
+			if m[i].isLaizi {
+				tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 2)...)
+				tmpLaiziCount -= 2
+				if tmpLaiziCount < 0 {
 					continue
 				}
-				cardType, section, cardValue, fix = p.isPairStraight(tmpCards)
-				if cardType != 0 {
-					newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-					if p.CompareFeature(newFeature, feature) == Greater {
-						for i1 := range tmpCards {
-							tmpCards[i1].IsUse = true
+			} else {
+				tmpCards = append(tmpCards, p.GetCards(cards, i, 2)...)
+				tmpLength = len(tmpCards)
+				if tmpLength == 1 {
+					tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 1)...)
+					tmpLaiziCount -= 1
+					if tmpLaiziCount < 0 {
+						continue
+					}
+				}
+			}
+		} else {
+			tmpLaiziCount -= 2
+			if tmpLaiziCount < 0 {
+				continue
+			}
+			tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 2)...)
+		}
+		for i2 := 1; i2 < baseSection; i2++ {
+			if _, ok2 = m[i-int64(i2)]; ok2 {
+				if m[i-int64(i2)].isLaizi {
+					tmpLaiziCount -= 2
+					if tmpLaiziCount < 0 {
+						break
+					}
+					tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 2)...)
+				} else {
+					tmpPair := p.GetCards(cards, i-int64(i2), 2)
+					if len(tmpPair) == 1 {
+						tmpLaiziCount -= 1
+						if tmpLaiziCount < 0 {
+							break
 						}
-						return &cardCombo{
+						tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 1)...)
+					}
+					tmpCards = append(tmpCards, tmpPair...)
+				}
+			} else {
+				tmpLaiziCount -= 2
+				if tmpLaiziCount < 0 {
+					break
+				}
+				tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 2)...)
+			}
+			if i2 == baseSection-1 && len(tmpCards)/2 == baseSection {
+				cardType, section, cardValue, fix := p.isPairStraight(tmpCards)
+				newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
+				if result == nil {
+					if p.CompareFeature(newFeature, feature) == Greater {
+						lastLaiziCount = laiziCount - tmpLaiziCount
+						result = &cardCombo{
+							Feature: newFeature,
+							Cards:   tmpCards,
+						}
+					}
+				} else {
+					if p.CompareFeature(newFeature, feature) == Greater && p.CompareFeature(newFeature, result.Feature) == Less && lastLaiziCount >= laiziCount-tmpLaiziCount {
+						lastLaiziCount = laiziCount - tmpLaiziCount
+						result = &cardCombo{
 							Feature: newFeature,
 							Cards:   tmpCards,
 						}
@@ -916,100 +967,12 @@ func (p *Poker) GetMinPairStraight(cards []*Card, feature int64, bomb, divide, l
 			}
 		}
 	}
-	// 拆牌但是不拆炸弹和不使用癞子
-	if divide {
-		for i := len(vs) - 1; i >= 0; i-- {
-			p.UnUse(cards)
-			if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值
-				continue
-			}
-			flag = true
-			tmpCards = nil
-			if vs[i].times < 4 && i+baseSection < len(vs) {
-				for i1 := i - 1; i1 > i-baseSection && i1 >= 1 && vs[i1].times < 4 && !vs[i1].isLaizi; i1-- {
-					if vs[i1].value != vs[i1-1].value+1 || vs[i1].value >= two {
-						flag = false
-						break
-					}
-					tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 2)...)
-				}
-				if (flag && len(tmpCards) == baseSection) || (feature == 0 && len(tmpCards) >= 6) {
-					if p.IsUse(tmpCards) {
-						continue
-					}
-					cardType, section, cardValue, fix = p.isPairStraight(tmpCards)
-					if cardType != 0 {
-						newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-						if p.CompareFeature(newFeature, feature) == Greater {
-							for i1 := range tmpCards {
-								tmpCards[i1].IsUse = true
-							}
-							return &cardCombo{
-								Feature: newFeature,
-								Cards:   tmpCards,
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	// 使用癞子
-	if laizi {
-		var tmpLaiziCount = laiziCount
-		for i := len(vs) - 1; i >= 0; i-- {
-			p.UnUse(cards)
-			if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值
-				continue
-			}
-			flag = true
-			tmpCards = nil
-			if vs[i].times < 4 {
-				for i1 := i - 1; i1 < i-baseSection && i1 >= 1 && vs[i1].times < 4 && !vs[i1].isLaizi && tmpLaiziCount >= 0; i1-- {
-					if i1 < len(vs) && vs[i1].value < two && vs[i1].value == vs[i1-1].value+1 {
-						if tmpLaiziCount < 2-vs[i1].times {
-							break
-						}
-						if vs[i1].times < 2 {
-							tmpLaiziCount -= 2 - vs[i1].times
-						}
-						tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 2)...)
-					} else {
-						if tmpLaiziCount < 2 {
-							break
-						}
-						tmpLaiziCount -= 2
-						i1++ // 再判断一次
-					}
-				}
-				tmpCards = append(tmpCards, p.GetMinLaizi(cards, laiziCount-tmpLaiziCount)...)
-				if (flag && len(tmpCards)/2 == baseSection) || (feature == 0 && len(tmpCards) >= 6) {
-					if p.IsUse(tmpCards) {
-						continue
-					}
-					if laiziCount-tmpLaiziCount >= 4 { // 使用癞子足够当炸弹使用了
-						continue
-					}
-					cardType, section, cardValue, fix = p.isPairStraight(tmpCards)
-					if cardType != 0 {
-						newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-						if p.CompareFeature(newFeature, feature) == Greater {
-							for i1 := range tmpCards {
-								tmpCards[i1].IsUse = true
-							}
-							return &cardCombo{
-								Feature: newFeature,
-								Cards:   tmpCards,
-							}
-						}
-					}
-				}
-			}
-		}
+	if result != nil {
+		return result
 	}
 	// 使用炸弹
 	if bomb {
-		if result := p.GetMinBomb(cards, feature, true); result != nil {
+		if result = p.GetMinBomb(cards, feature, true); result != nil {
 			return result
 		}
 	}
@@ -1021,44 +984,101 @@ func (p *Poker) GetMinPairStraight(cards []*Card, feature int64, bomb, divide, l
 // feature: 调用传入的特征值
 // bomb:是否使用炸弹，divide:是否拆牌,laizi:是否使用癞子
 func (p *Poker) GetMinTrioStraight(cards []*Card, feature int64, bomb, divide, laizi bool) *cardCombo {
-	vs, laiziCount, _ := cardsToValueSetOnLaizi(cards)
-	var cardType, section, cardValue, fix int64
+	if len(cards) < 6 {
+		return nil
+	}
 	var newFeature int64
 	var tmpCards []*Card
 	// 分解特征值
 	var _, baseSection, baseValue, _ = p.DecodeFeature(feature)
 	if baseSection == 0 {
-		baseSection = len(cards) / 3
+		baseSection = 2
 	}
-	var flag bool
-	// 不用癞子,不拆牌
-	for i := len(vs) - 1; i >= 0; i-- {
+	if baseValue == 0 {
+		baseValue = there
+	}
+	if len(cards) < baseSection {
+		return nil
+	}
+	m, laiziCount := cardsToValueMap(cards)
+	var ok bool
+	var ok2 bool
+	var result *cardCombo
+	var tmpLength int
+	var lastLaiziCount int64
+	for i := ace; i > baseValue-int64(baseSection)+2; i-- {
 		p.UnUse(cards)
-		if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值,不能接2以上
-			continue
+		var tmpLaiziCount int64 = 0
+		if laizi {
+			tmpLaiziCount = laiziCount
 		}
-		flag = true
-		tmpCards = nil
-		if vs[i].times == 3 && i+baseSection < len(vs) {
-			for i1 := i + 1; i1 < i+baseSection && i1 >= 1 && vs[i1].times == 1 && !vs[i1].isLaizi; i1++ {
-				if vs[i1].value != vs[i1-1].value+1 || vs[i1].value >= two {
-					flag = false
-					break
-				}
-				tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 3)...)
-			}
-			if (flag && len(tmpCards) == baseSection) || (feature == 0 && len(tmpCards) >= 6) {
-				if p.IsUse(tmpCards) {
+		tmpCards = make([]*Card, 0)
+		if _, ok = m[i]; ok {
+			if m[i].isLaizi {
+				tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 3)...)
+				tmpLaiziCount -= 3
+				if tmpLaiziCount < 0 {
 					continue
 				}
-				cardType, section, cardValue, fix = p.isTrioStraight(tmpCards)
-				if cardType != 0 {
-					newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-					if p.CompareFeature(newFeature, feature) == Greater {
-						for i1 := range tmpCards {
-							tmpCards[i1].IsUse = true
+			} else {
+				tmpCards = append(tmpCards, p.GetCards(cards, i, 3)...)
+				tmpLength = len(tmpCards)
+				if tmpLength < 3 {
+					tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, int64(3-tmpLength))...)
+					tmpLaiziCount -= int64(3 - tmpLength)
+					if tmpLaiziCount < 0 {
+						continue
+					}
+				}
+			}
+		} else {
+			tmpLaiziCount -= 3
+			if tmpLaiziCount < 0 {
+				continue
+			}
+			tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 3)...)
+		}
+		for i2 := 1; i2 < baseSection; i2++ {
+			if _, ok2 = m[i-int64(i2)]; ok2 {
+				if m[i-int64(i2)].isLaizi {
+					tmpLaiziCount -= 3
+					if tmpLaiziCount < 0 {
+						break
+					}
+					tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 3)...)
+				} else {
+					tmpPair := p.GetCards(cards, i-int64(i2), 3)
+					if len(tmpPair) < 3 {
+						tmpLaiziCount -= int64(3 - len(tmpPair))
+						if tmpLaiziCount < 0 {
+							break
 						}
-						return &cardCombo{
+						tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, int64(3-len(tmpPair)))...)
+					}
+					tmpCards = append(tmpCards, tmpPair...)
+				}
+			} else {
+				tmpLaiziCount -= 3
+				if tmpLaiziCount < 0 {
+					break
+				}
+				tmpCards = append(tmpCards, p.GetCardsForLaizi(cards, 3)...)
+			}
+			if i2 == baseSection-1 && len(tmpCards)/3 == baseSection {
+				cardType, section, cardValue, fix := p.isTrioStraight(tmpCards)
+				newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
+				if result == nil {
+					if p.CompareFeature(newFeature, feature) == Greater {
+						lastLaiziCount = laiziCount - tmpLaiziCount
+						result = &cardCombo{
+							Feature: newFeature,
+							Cards:   tmpCards,
+						}
+					}
+				} else {
+					if p.CompareFeature(newFeature, feature) == Greater && p.CompareFeature(newFeature, result.Feature) == Less && lastLaiziCount >= laiziCount-tmpLaiziCount {
+						lastLaiziCount = laiziCount - tmpLaiziCount
+						result = &cardCombo{
 							Feature: newFeature,
 							Cards:   tmpCards,
 						}
@@ -1067,60 +1087,8 @@ func (p *Poker) GetMinTrioStraight(cards []*Card, feature int64, bomb, divide, l
 			}
 		}
 	}
-	// 三条的不需要拆牌，因为只能拆炸弹
-
-	// 使用癞子
-	if laizi {
-		var tmpLaiziCount = laiziCount
-		for i := len(vs) - 1; i >= 0; i-- {
-			p.UnUse(cards)
-			if vs[i].isLaizi || vs[i].value <= baseValue || vs[i].value >= two { // 不用癞子,牌值小于最小值
-				continue
-			}
-			flag = true
-			tmpCards = nil
-			if vs[i].times < 4 {
-				for i1 := i - 1; i1 < i-baseSection && i1 >= 1 && vs[i1].times < 4 && !vs[i1].isLaizi && tmpLaiziCount >= 0; i1-- {
-					if i1 < len(vs) && vs[i1].value < two && vs[i1].value == vs[i1-1].value+1 {
-						if tmpLaiziCount < 3-vs[i1].times {
-							break
-						}
-						if vs[i1].times < 3 {
-							tmpLaiziCount -= 3 - vs[i1].times
-						}
-						tmpCards = append(tmpCards, p.GetCards(cards, vs[i1].value, 3)...)
-					} else {
-						if tmpLaiziCount < 3 {
-							break
-						}
-						tmpLaiziCount -= 3
-						i1++ // 再判断一次
-					}
-				}
-				tmpCards = append(tmpCards, p.GetMinLaizi(cards, laiziCount-tmpLaiziCount)...)
-				if (flag && len(tmpCards)/3 == baseSection) || (feature == 0 && len(tmpCards) >= 6) {
-					if p.IsUse(tmpCards) {
-						continue
-					}
-					if laiziCount-tmpLaiziCount >= 4 { // 使用癞子足够当炸弹使用了
-						continue
-					}
-					cardType, section, cardValue, fix = p.isTrioStraight(tmpCards)
-					if cardType != 0 {
-						newFeature = p.EncodeFeature(cardType, int(section), cardValue, fix)
-						if p.CompareFeature(newFeature, feature) == Greater {
-							for i1 := range tmpCards {
-								tmpCards[i1].IsUse = true
-							}
-							return &cardCombo{
-								Feature: newFeature,
-								Cards:   tmpCards,
-							}
-						}
-					}
-				}
-			}
-		}
+	if result != nil {
+		return result
 	}
 	// 使用炸弹
 	if bomb {

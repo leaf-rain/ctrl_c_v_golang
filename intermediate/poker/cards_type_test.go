@@ -3,7 +3,7 @@ package poker
 import "testing"
 
 func TestPoker_isBomb(t *testing.T) {
-	p.SetLaizi([]int64{3, 4})
+	//p.SetLaizi([]int64{3, 4})
 	var nCards = []int64{
 		31, 32, 33, 34,
 	}
@@ -33,7 +33,7 @@ func TestPoker_isJokePair(t *testing.T) {
 }
 
 func TestPoker_isOnePair(t *testing.T) {
-	p.SetLaizi([]int64{4})
+	//p.SetLaizi([]int64{4})
 	var nCards = []int64{
 		170, 170,
 	}
@@ -179,7 +179,7 @@ func TestPoker_isFourWithTwoPair(t *testing.T) {
 func TestPoker_isSingleStraight(t *testing.T) {
 	p.SetLaizi([]int64{11})
 	var nCards = []int64{
-		111, 111, 111, 111, 71, 42, 51, 62,
+		111, 71, 42, 51, 62,
 	}
 	var cards = p.NumToCard(nCards)
 	t.Log(p.isSingleStraight(cards))
@@ -249,7 +249,7 @@ func TestPoker_isTrioStraight(t *testing.T) {
 func TestPoker_isTrioStraightWithSingle(t *testing.T) {
 	p.SetLaizi([]int64{11})
 	var nCards = []int64{
-		111, 111, 111, 111, 61, 42, 111, 111,
+		111, 111, 111, 61, 111, 111, 111, 42,
 	}
 	var cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithSingle(cards))
@@ -264,21 +264,21 @@ func TestPoker_isTrioStraightWithSingle(t *testing.T) {
 	cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithSingle(cards))
 	nCards = []int64{
-		111, 111, 111, 111, 81, 91, 141, 151,
+		111, 111, 111, 111, 81, 101, 141, 151,
 	}
 	cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithSingle(cards))
 }
 
 func TestPoker_isTrioStraightWithPair(t *testing.T) {
-	p.SetLaizi([]int64{11})
+	p.SetLaizi([]int64{6})
 	var nCards = []int64{
 		111, 111, 111, 111, 61, 42, 111, 111, 111, 111,
 	}
 	var cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithPair(cards))
 	nCards = []int64{
-		111, 111, 111, 111, 111, 52, 51, 61, 111, 111,
+		111, 111, 111, 111, 71, 52, 41, 61, 111, 111,
 	}
 	cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithPair(cards))
@@ -288,7 +288,16 @@ func TestPoker_isTrioStraightWithPair(t *testing.T) {
 	cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithPair(cards))
 	nCards = []int64{
-		111, 111, 111, 91, 121, 131, 141, 151, 111, 111,
+		61,
+		92,
+		91,
+		82,
+		81,
+		54,
+		53,
+		52,
+		44,
+		43,
 	}
 	cards = p.NumToCard(nCards)
 	t.Log(p.isTrioStraightWithPair(cards))

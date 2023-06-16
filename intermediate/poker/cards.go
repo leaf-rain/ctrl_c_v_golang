@@ -100,6 +100,29 @@ func (p *Poker) NumToCard(num interface{}) []*Card {
 			card := p.NumToCard(v)
 			cards = append(cards, card...)
 		}
+	case uint32:
+		v := num.(uint32)
+		card := Card{}
+		card.Value = int64(v / 10)
+		card.Type = int64(v) - card.Value*10
+		if 160 == v {
+			card.Type = 5
+			card.Value = 16
+		}
+		if 170 == v {
+			card.Type = 6
+			card.Value = 17
+		}
+		if p.IsLaizi(card.Value) {
+			card.IsLaizi = true
+		}
+		cards = append(cards, &card)
+	case []uint32:
+		vs := num.([]uint32)
+		for _, v := range vs {
+			card := p.NumToCard(v)
+			cards = append(cards, card...)
+		}
 	default:
 		return nil
 	}
@@ -177,7 +200,8 @@ func (p *Poker) GetCards(cards []*Card, target int64, num int) []*Card {
 	}
 	var result []*Card
 	for i := range cards {
-		if cards[i].Value == target {
+		if cards[i].Value == target && !cards[i].IsUse {
+			cards[i].IsUse = true
 			result = append(result, cards[i])
 			if len(result) == num {
 				break
@@ -189,9 +213,13 @@ func (p *Poker) GetCards(cards []*Card, target int64, num int) []*Card {
 
 // GetCards 获取n张癞子牌
 func (p *Poker) GetCardsForLaizi(cards []*Card, target int64) []*Card {
+	if target == 0 {
+		return []*Card{}
+	}
 	var result []*Card
 	for i := range cards {
-		if cards[i].IsLaizi {
+		if cards[i].IsLaizi && !cards[i].IsUse {
+			cards[i].IsUse = true
 			result = append(result, cards[i])
 			if len(result) == int(target) {
 				break

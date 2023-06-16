@@ -41,12 +41,17 @@ func (p *Poker) isBomb(cards []*Card) (int64, int64, int64, int64) {
 			}
 		}
 	}
-	if int64(length)-laiziCount > 1 { // 除去赖子只可能剩1种牌型
-		return 0, 0, 0, 0
-	}
-	var cardsLen = int64(len(cards))
-	if cardsLen == 4 {
-
+	var tmp int
+	for i := range vs { // 除去赖子只可能剩1种牌型
+		if vs[i].value > two {
+			return 0, 0, 0, 0
+		}
+		if !vs[i].isLaizi {
+			tmp++
+			if tmp > 1 {
+				return 0, 0, 0, 0
+			}
+		}
 	}
 	if length == 1 {
 		return Bomb, int64(len(cards)), vs[0].value, fix
@@ -90,7 +95,11 @@ func (p *Poker) isSingle(nCards []*Card) (int64, int64, int64, int64) {
 	if nCards[0].IsLaizi {
 		laiziCount++
 	}
-	return Single, 1, nCards[0].Value, FixNo
+	var fix = FixNo
+	if nCards[0].IsLaizi {
+		fix = FixHave
+	}
+	return Single, 1, nCards[0].Value, fix
 }
 
 // isOnePair 是否为一对
@@ -105,14 +114,6 @@ func (p *Poker) isOnePair(cards []*Card) (int64, int64, int64, int64) {
 	var fix = FixNo
 	if laiziCount > 0 {
 		fix = FixHave
-	}
-	if laiziCount == int64(len(cards)) { // 全是癞子的炸弹需要判断，如果全是同类型的癞子则当成没有癞子的炸弹打出
-		fix = FixNo
-		for i := range cards {
-			if cards[i].Value != cards[0].Value {
-				fix = FixHave
-			}
-		}
 	}
 	// 判断癞子数量
 	if laiziCount == 2 {
@@ -147,14 +148,6 @@ func (p *Poker) isTrio(cards []*Card) (int64, int64, int64, int64) {
 	if laiziCount > 0 {
 		fix = FixHave
 	}
-	if laiziCount == int64(len(cards)) { // 全是癞子的炸弹需要判断，如果全是同类型的癞子则当成没有癞子的炸弹打出
-		fix = FixNo
-		for i := range cards {
-			if cards[i].Value != cards[0].Value {
-				fix = FixHave
-			}
-		}
-	}
 	// 判断癞子数量
 	if laiziCount == 3 { // 3张全是癞子牌
 		if tmpValue := p.GetMaxNoJoker(cards); tmpValue != 0 {
@@ -163,11 +156,35 @@ func (p *Poker) isTrio(cards []*Card) (int64, int64, int64, int64) {
 		return Trio, 1, cards[2].Value, fix
 	}
 	p.SortCards(cards)
-	if laiziCount == 2 && vs[0].value < littleKing { // 有癞子牌
-		return Trio, 1, vs[0].value, fix
+	if laiziCount == 2 { // 有癞子牌
+		var maxValue int64
+		for i := range vs {
+			if vs[i].isLaizi {
+				continue
+			}
+			if vs[i].value > maxValue && vs[i].value < littleKing {
+				maxValue = vs[i].value
+			}
+		}
+		return Trio, 1, maxValue, fix
 	}
-	if laiziCount == 1 && vs[0].value < littleKing { // 有癞子牌
-		return Trio, 1, vs[0].value, fix
+	if laiziCount == 1 { // 有癞子牌
+		var tmpValue int
+		var maxValue int64
+		for i := range vs {
+			if vs[i].isLaizi {
+				continue
+			}
+			tmpValue++
+			if vs[i].value > maxValue && vs[i].value < littleKing {
+				maxValue = vs[i].value
+			}
+		}
+		if tmpValue > 1 {
+			return 0, 0, 0, 0
+		} else {
+			return Trio, 1, maxValue, fix
+		}
 	} else {
 		// 没有癞子 判断三张是否都相等
 		if cards[0].Value == cards[1].Value &&
@@ -333,14 +350,16 @@ func (p *Poker) isFourWithTwoPair(cards []*Card) (int64, int64, int64, int64) {
 		if item.isLaizi {
 			tmpLaiziCount -= item.times
 		}
-		tmpLaiziCount -= 4 - item.times
+		if item.times < 4 {
+			tmpLaiziCount -= 4 - item.times
+		}
 		if result < item.value && tmpLaiziCount >= 0 {
 			flag = true
 			for _, item2 := range vs {
 				if item2.value == item.value {
 					continue
 				}
-				if item.times%2 == 0 {
+				if item2.times%2 == 0 {
 					continue
 				} else {
 					tmpLaiziCount--
@@ -368,42 +387,52 @@ func (p *Poker) isSingleStraight(cards []*Card) (int64, int64, int64, int64) {
 		return 0, 0, 0, 0
 	}
 	var section = int64(len(cards))
-	vs, laiziCount := cardsToValueSet(cards)
+	vs, laiziCount := cardsToValueMap(cards)
 	var fix = FixNo
 	if laiziCount > 0 {
 		fix = FixHave
 	}
 	if int64(len(cards)) == laiziCount { // 全是癞子牌
 		p.SortCards(cards)
-		return SingleStraight, 1, cards[len(cards)-1].Value, fix
+		return SingleStraight, 1, ace, fix
 	}
-	var tmpLaiziCount = laiziCount
-	var result = vs[len(vs)-1].value
-	var flag = true
-	for i := len(vs) - 1; i >= 0; i-- {
-		if vs[i].value >= two && !vs[i].isLaizi { // 顺子不能连2以上
-			return 0, 0, 0, 0
-		}
-		if vs[i].times > 1 {
-			flag = false
-			break
-		}
-		if i == len(vs)-1 {
+	var length = len(cards)
+	var result int64
+	var ok bool
+	var timLaiziCount int64
+	var flag bool
+	for i := ace; i >= 0; i-- {
+		timLaiziCount = laiziCount
+		result = i
+		_, ok = vs[i]
+		if !ok && timLaiziCount < 1 {
 			continue
 		}
-		result++
-		if result == vs[i].value {
-			continue
-		} else if tmpLaiziCount >= 1 { // 有癞子牌消耗一张癞子牌再重复计算一次
-			i++
-			tmpLaiziCount--
-		} else {
-			flag = false
+		if !ok || vs[i].isLaizi {
+			timLaiziCount--
+		}
+		for i2 := 1; i2 < length; i2++ {
+			if _, ok = vs[result-int64(i2)]; !ok {
+				timLaiziCount--
+				if timLaiziCount < 0 {
+					break
+				}
+			} else {
+				if vs[result-int64(i2)].isLaizi {
+					timLaiziCount--
+					if timLaiziCount < 0 {
+						break
+					}
+				}
+			}
+			if i2 == length-1 {
+				flag = true
+				break
+			}
+		}
+		if flag {
 			break
 		}
-	}
-	if tmpLaiziCount > 0 {
-		result += tmpLaiziCount
 	}
 	if flag {
 		return SingleStraight, section, result, fix
@@ -417,58 +446,66 @@ func (p *Poker) isPairStraight(cards []*Card) (int64, int64, int64, int64) {
 	if length < 6 || length%2 != 0 {
 		return 0, 0, 0, 0
 	}
-	var section = int64(len(cards) / 2)
-	vs, laiziCount := cardsToValueSet(cards)
+	var section = int64(len(cards)) / 2
+	vs, laiziCount := cardsToValueMap(cards)
 	var fix = FixNo
 	if laiziCount > 0 {
 		fix = FixHave
 	}
-	valueSetSortByValue(vs)
 	if int64(len(cards)) == laiziCount { // 全是癞子牌
 		p.SortCards(cards)
-		return PairStraight, 1, cards[len(cards)-1].Value, fix
+		return PairStraight, 1, ace, fix
 	}
-	var tmpLaiziCount = laiziCount
-	var result = vs[len(vs)-1].value
-	var flag = true
-	for i := len(vs) - 1; i >= 0; i-- {
-		if vs[i].value >= two && !vs[i].isLaizi { // 顺子不能连2以上
-			return 0, 0, 0, 0
-		}
-		if vs[i].times > 2 {
-			flag = false
-			break
-		}
-		if i == len(vs)-1 {
-			if vs[i].times == 1 {
-				tmpLaiziCount--
-				if tmpLaiziCount < 0 {
-					flag = false
-					break
-				}
-			}
+	length = len(cards) / 2
+	var result int64
+	var ok bool
+	var timLaiziCount int64
+	var flag bool
+	for i := ace; i >= 0; i-- {
+		timLaiziCount = laiziCount
+		result = i
+		_, ok = vs[i]
+		if !ok && timLaiziCount < 2 {
 			continue
 		}
-		result++
-		if result == vs[i].value {
-			if vs[i].times == 1 {
-				tmpLaiziCount -= 1
-				if tmpLaiziCount < 0 {
-					flag = false
+		if !ok || vs[i].isLaizi {
+			timLaiziCount -= 2
+		}
+		if ok && vs[result].times < 2 {
+			timLaiziCount -= (2 - vs[result].times)
+			if timLaiziCount < 0 {
+				continue
+			}
+		}
+		for i2 := 1; i2 < length; i2++ {
+			if _, ok = vs[result-int64(i2)]; !ok {
+				timLaiziCount -= 2
+				if timLaiziCount < 0 {
 					break
 				}
+			} else {
+				if vs[result-int64(i2)].isLaizi {
+					timLaiziCount -= 2
+					if timLaiziCount < 0 {
+						break
+					}
+				} else {
+					if vs[result-int64(i2)].times < 2 {
+						timLaiziCount -= (2 - vs[result-int64(i2)].times)
+						if timLaiziCount < 0 {
+							break
+						}
+					}
+				}
 			}
-			continue
-		} else if tmpLaiziCount >= 2 { // 有癞子牌消耗两张张癞子牌再重复计算一次
-			i++
-			tmpLaiziCount -= 2
-		} else {
-			flag = false
+			if i2 == length-1 {
+				flag = true
+				break
+			}
+		}
+		if flag {
 			break
 		}
-	}
-	if flag && tmpLaiziCount > 0 && tmpLaiziCount%2 == 0 {
-		result += tmpLaiziCount / 2
 	}
 	if flag {
 		return PairStraight, section, result, fix
@@ -482,58 +519,67 @@ func (p *Poker) isTrioStraight(cards []*Card) (int64, int64, int64, int64) {
 	if length < 6 || length%3 != 0 {
 		return 0, 0, 0, 0
 	}
-	var section = int64(len(cards) / 3)
-	vs, laiziCount := cardsToValueSet(cards)
+	var section = int64(len(cards)) / 3
+	vs, laiziCount := cardsToValueMap(cards)
 	var fix = FixNo
 	if laiziCount > 0 {
 		fix = FixHave
 	}
-	valueSetSortByValue(vs)
 	if int64(len(cards)) == laiziCount { // 全是癞子牌
 		p.SortCards(cards)
-		return TrioStraight, 1, cards[len(cards)-1].Value, fix
+		return TrioStraight, 1, ace, fix
 	}
-	var tmpLaiziCount = laiziCount
-	var result = vs[len(vs)-1].value
-	var flag = true
-	for i := len(vs) - 1; i >= 0; i-- {
-		if vs[i].value >= two && !vs[i].isLaizi { // 顺子不能连2以上
-			return 0, 0, 0, 0
-		}
-		if vs[i].times > 3 {
-			flag = false
-			break
-		}
-		if i == len(vs)-1 {
-			if vs[i].times != 3 {
-				tmpLaiziCount -= 3 - vs[i].times
-				if tmpLaiziCount < 0 {
-					flag = false
-					break
-				}
-			}
+	var l int64 = 3
+	length = len(cards) / int(l)
+	var result int64
+	var ok bool
+	var timLaiziCount int64
+	var flag bool
+	for i := ace; i >= 0; i-- {
+		timLaiziCount = laiziCount
+		result = i
+		_, ok = vs[i]
+		if !ok && timLaiziCount < l {
 			continue
 		}
-		result++
-		if result == vs[i].value {
-			if vs[i].times != 3 {
-				tmpLaiziCount -= 3 - vs[i].times
-				if tmpLaiziCount < 0 {
-					flag = false
+		if !ok || vs[i].isLaizi {
+			timLaiziCount -= l
+		}
+		if ok && vs[result].times < l {
+			timLaiziCount -= (l - vs[result].times)
+			if timLaiziCount < 0 {
+				continue
+			}
+		}
+		for i2 := 1; i2 < length; i2++ {
+			if _, ok = vs[result-int64(i2)]; !ok {
+				timLaiziCount -= l
+				if timLaiziCount < 0 {
 					break
 				}
+			} else {
+				if vs[result-int64(i2)].isLaizi {
+					timLaiziCount -= l
+					if timLaiziCount < 0 {
+						break
+					}
+				} else {
+					if vs[result-int64(i2)].times < l {
+						timLaiziCount -= (l - vs[result-int64(i2)].times)
+						if timLaiziCount < 0 {
+							break
+						}
+					}
+				}
 			}
-			continue
-		} else if tmpLaiziCount >= 3 { // 有癞子牌消耗两张张癞子牌再重复计算一次
-			i++
-			tmpLaiziCount -= 3
-		} else {
-			flag = false
+			if i2 == length-1 {
+				flag = true
+				break
+			}
+		}
+		if flag {
 			break
 		}
-	}
-	if flag && tmpLaiziCount > 0 && tmpLaiziCount%3 == 0 {
-		result += tmpLaiziCount / 3
 	}
 	if flag {
 		return TrioStraight, section, result, fix
@@ -547,59 +593,69 @@ func (p *Poker) isTrioStraightWithSingle(cards []*Card) (int64, int64, int64, in
 	if length < 8 || length%4 != 0 {
 		return 0, 0, 0, 0
 	}
-	var section = int64(len(cards) / 4)
-	vs, laiziCount, _ := cardsToValueSetOnLaizi(cards)
+	var section = int64(len(cards)) / 4
+	vs, laiziCount := cardsToValueMap(cards)
 	var fix = FixNo
 	if laiziCount > 0 {
 		fix = FixHave
 	}
-	if int64(len(cards)) == laiziCount { // 全是癞子牌
+	length = len(cards) / 4
+	if laiziCount >= int64(len(cards)-length) { // 全是癞子牌
 		p.SortCards(cards)
-		return TrioStraightWithSingle, 1, cards[len(cards)-1].Value, fix
+		return TrioStraightWithSingle, 1, ace, fix
 	}
-	var groupNum = length/4 - 1
+	var l int64 = 3
 	var result int64
-	var tmpLaiziCount int64
-	// 从牌组最大的值开始往后遍历
+	var ok bool
+	var timLaiziCount int64
 	var flag bool
-	for i := range vs {
-		flag = true
-		if vs[i].value >= two && !vs[i].isLaizi { // 顺子不能连2以上
+	for i := ace; i >= 0; i-- {
+		timLaiziCount = laiziCount
+		result = i
+		_, ok = vs[i]
+		if !ok && timLaiziCount < l {
 			continue
 		}
-		tmpLaiziCount = laiziCount
-		result = vs[i].value
-		if vs[i].isLaizi { // 如果是癞子牌，直接扣减癞子牌数量
-			tmpLaiziCount -= 3 // 最多减3张
-		} else {
-			tmpLaiziCount -= 3 - vs[i].times
+		if !ok || vs[i].isLaizi {
+			timLaiziCount -= l
 		}
-		if tmpLaiziCount < 0 {
-			continue
+		if ok && vs[result].times < l {
+			timLaiziCount -= (l - vs[result].times)
+			if timLaiziCount < 0 {
+				continue
+			}
 		}
-		for j := 1; j <= groupNum; j++ { // 还需要n组
-			if i+j < len(vs) && vs[i+j].value == result-int64(j) { // vs中内有数据且数据符合要求
-				tmpLaiziCount -= 3 - vs[i+j].times
-				if tmpLaiziCount < 0 {
-					flag = false
+		for i2 := 1; i2 < length; i2++ {
+			if _, ok = vs[result-int64(i2)]; !ok {
+				timLaiziCount -= l
+				if timLaiziCount < 0 {
 					break
 				}
 			} else {
-				tmpLaiziCount -= 3 // 最多减3张
-				if tmpLaiziCount < 0 {
-					flag = false
-					break
+				if vs[result-int64(i2)].isLaizi {
+					timLaiziCount -= l
+					if timLaiziCount < 0 {
+						break
+					}
+				} else {
+					if vs[result-int64(i2)].times < l {
+						timLaiziCount -= (l - vs[result-int64(i2)].times)
+						if timLaiziCount < 0 {
+							break
+						}
+					}
 				}
+			}
+			if i2 == length-1 {
+				flag = true
+				break
 			}
 		}
 		if flag {
 			break
 		}
 	}
-	if flag && result > 0 && tmpLaiziCount > 0 && tmpLaiziCount%4 == 0 {
-		result += tmpLaiziCount / 4
-	}
-	if flag && result > 0 {
+	if flag {
 		return TrioStraightWithSingle, section, result, fix
 	}
 	return 0, 0, 0, 0
@@ -611,77 +667,104 @@ func (p *Poker) isTrioStraightWithPair(cards []*Card) (int64, int64, int64, int6
 	if length < 10 || length%5 != 0 {
 		return 0, 0, 0, 0
 	}
-	var section = int64(len(cards) / 5)
-	vs, laiziCount, _ := cardsToValueSetOnLaizi(cards)
+	var section = int64(len(cards)) / 5
+	vs, laiziCount := cardsToValueMap(cards)
 	var fix = FixNo
 	if laiziCount > 0 {
 		fix = FixHave
 	}
-	if int64(len(cards)) == laiziCount { // 全是癞子牌
+	length = len(cards) / 5
+	if laiziCount >= int64(len(cards)-length) { // 癞子牌过多不同判断
 		p.SortCards(cards)
-		return TrioStraightWithPair, 1, cards[len(cards)-1].Value, fix
+		return TrioStraightWithPair, 1, ace, fix
 	}
-	var groupNum = length/5 - 1
+	var l int64 = 3
 	var result int64
-	var tmpLaiziCount int64
-	var tmpIndex int
-	// 从牌组最大的值开始往后遍历
-	var flag = true
-	for i := range vs {
-		if vs[i].value >= two && !vs[i].isLaizi { // 顺子不能连2以上
+	var ok bool
+	var timLaiziCount int64
+	var flag bool
+	for i := ace; i >= 0; i-- {
+		timLaiziCount = laiziCount
+		result = i
+		_, ok = vs[i]
+		if !ok && timLaiziCount < l {
 			continue
 		}
-		tmpLaiziCount = laiziCount
-		result = vs[i].value
-		if vs[i].isLaizi { // 如果是癞子牌，直接扣减癞子牌数量
-			tmpLaiziCount -= 3 // 最多减3张
-		} else {
-			tmpLaiziCount -= 3 - vs[i].times
+		var outed = make(map[int64]int64)
+		if !ok || vs[i].isLaizi {
+			timLaiziCount -= l
 		}
-		if tmpLaiziCount < 0 {
-			flag = false
-			continue
+		if ok && vs[result].times < l {
+			timLaiziCount -= (l - vs[result].times)
+			if timLaiziCount < 0 {
+				continue
+			}
+			outed[vs[i].value] = vs[result].times
+		} else if ok && vs[result].times >= l {
+			outed[vs[i].value] = 3
 		}
-		for j := 1; j <= groupNum; j++ { // 还需要n组
-			tmpIndex = i + j
-			if tmpIndex < len(vs) && vs[tmpIndex].value == result-int64(j) { // vs中内有数据且数据符合要求
-				tmpLaiziCount -= 3 - vs[tmpIndex].times
-				if tmpLaiziCount < 0 {
-					flag = false
+		var trioFlag bool
+		for i2 := 1; i2 < length; i2++ {
+			if _, ok = vs[result-int64(i2)]; !ok {
+				timLaiziCount -= l
+				if timLaiziCount < 0 {
 					break
 				}
 			} else {
-				tmpLaiziCount -= 3 // 最多减3张
-				if tmpLaiziCount < 0 {
-					flag = false
-					break
+				if vs[result-int64(i2)].isLaizi {
+					timLaiziCount -= l
+					if timLaiziCount < 0 {
+						break
+					}
+				} else {
+					if vs[result-int64(i2)].times < l {
+						timLaiziCount -= (l - vs[result-int64(i2)].times)
+						if timLaiziCount < 0 {
+							break
+						}
+					}
+				}
+				if vs[result-int64(i2)].times >= l {
+					outed[vs[result-int64(i2)].value] = 3
+				} else {
+					outed[vs[result-int64(i2)].value] = vs[result-int64(i2)].times
 				}
 			}
-		}
-		// 判断剩下的牌全部为是否为对子
-		tmpIndex++
-		if tmpIndex >= len(vs) {
-			flag = false
-			continue
-		}
-		for h := tmpIndex; h < len(vs); h++ {
-			if vs[h].isLaizi {
-				continue
+			if i2 == length-1 {
+				trioFlag = true
+				break
 			}
-			if vs[h].times%2 != 0 {
-				tmpLaiziCount--
-				if tmpLaiziCount < 0 {
-					flag = false
-					break
+		}
+		if trioFlag { // 判断剩下的牌是否全是对子
+			var pair int // 对子数量
+			var tmpTimes int64
+			for k, v := range vs {
+				if v.isLaizi {
+					continue
 				}
+				if _, ok = outed[k]; !ok {
+					tmpTimes = v.times
+				} else {
+					tmpTimes = v.times - outed[k]
+				}
+				if tmpTimes <= 0 {
+					continue
+				}
+				if tmpTimes%2 != 0 {
+					timLaiziCount -= 1
+					if timLaiziCount < 0 {
+						break
+					}
+					tmpTimes += 1
+				}
+				pair += int(tmpTimes / 2)
+			}
+			pair += int(timLaiziCount / 2)
+			if pair == length {
+				flag = true
+				break
 			}
 		}
-		if flag {
-			break
-		}
-	}
-	if flag && tmpLaiziCount > 0 && tmpLaiziCount%5 == 0 {
-		result += tmpLaiziCount / 5
 	}
 	if flag {
 		return TrioStraightWithPair, section, result, fix
