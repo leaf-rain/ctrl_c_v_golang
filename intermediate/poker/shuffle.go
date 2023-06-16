@@ -1,7 +1,6 @@
 package poker
 
 import (
-	"github.com/zeromicro/go-zero/core/logx"
 	"math/rand"
 	"time"
 )
@@ -34,7 +33,6 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 			if r.Float64() < float64(data[i][1])/100 { // 命中
 				if pop, success := p.CardsAssignValuePop([]int64{littleKing, bigKing}); success {
 					cardSet = append(cardSet, pop)
-					logx.Debugf("[ShuffleProbability] joke pair: %v", p.CardToNum(pop))
 				}
 			} else {
 				continue
@@ -49,7 +47,6 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 					for baseRand != tmpRand {
 						if pop, success := p.CardsAssignValuePop([]int64{tmpRand, tmpRand, tmpRand, tmpRand}); success {
 							cardSet = append(cardSet, pop)
-							logx.Debugf("[ShuffleProbability] bomb: %v", p.CardToNum(pop))
 							break
 						} else {
 							tmpRand++
@@ -73,7 +70,6 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 						tmpRand2 = tmpRand + 1
 						if pop, success := p.CardsAssignValuePop([]int64{tmpRand, tmpRand, tmpRand, tmpRand2, tmpRand2, tmpRand2}); success {
 							cardSet = append(cardSet, pop)
-							logx.Debugf("[ShuffleProbability] 飞机: %v", p.CardToNum(pop))
 							break
 						} else {
 							tmpRand++
@@ -96,7 +92,6 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 					for baseRand != tmpRand {
 						if pop, success := p.CardsAssignValuePop([]int64{tmpRand, tmpRand, tmpRand}); success {
 							cardSet = append(cardSet, pop)
-							logx.Debugf("[ShuffleProbability] trio: %v", p.CardToNum(pop))
 							break
 						} else {
 							tmpRand++
@@ -119,7 +114,6 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 					for baseRand != tmpRand && baseRand >= there && baseRand+4 < two {
 						if pop, success := p.CardsAssignValuePop([]int64{tmpRand, tmpRand + 1, tmpRand + 2, tmpRand + 3, tmpRand + 4}); success {
 							cardSet = append(cardSet, pop)
-							logx.Debugf("[ShuffleProbability] 顺子: %v", p.CardToNum(pop))
 							break
 						} else {
 							tmpRand++
@@ -142,7 +136,6 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 					for baseRand != tmpRand && baseRand >= there && baseRand+2 < two {
 						if pop, success := p.CardsAssignValuePop([]int64{tmpRand, tmpRand, tmpRand + 1, tmpRand + 1, tmpRand + 2, tmpRand + 2}); success {
 							cardSet = append(cardSet, pop)
-							logx.Debugf("[ShuffleProbability] 连对: %v", p.CardToNum(pop))
 							break
 						} else {
 							tmpRand++
@@ -184,5 +177,4 @@ func (p *Poker) ShuffleProbability(data [][3]int64) {
 		newCards = append(newCards, cardSet[i]...)
 	}
 	p.cards = newCards
-	logx.Debugf("shuffle success, length:%d, cards:%+v", len(newCards), p.CardToNum(newCards))
 }
