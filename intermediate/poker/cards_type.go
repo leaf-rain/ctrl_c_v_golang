@@ -356,7 +356,7 @@ func (p *Poker) isFourWithTwoPair(cards []*Card) (int64, int64, int64, int64) {
 		if result < item.value && tmpLaiziCount >= 0 {
 			flag = true
 			for _, item2 := range vs {
-				if item2.value == item.value {
+				if item2.value == item.value || item2.isLaizi {
 					continue
 				}
 				if item2.times%2 == 0 {

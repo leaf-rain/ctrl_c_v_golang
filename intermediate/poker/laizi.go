@@ -1,6 +1,7 @@
 package poker
 
 import (
+	"github.com/zeromicro/go-zero/core/logx"
 	"sort"
 )
 
@@ -9,7 +10,15 @@ func (p *Poker) GetLaizi() []int64 {
 }
 
 func (p *Poker) SetLaizi(data []int64) {
-	p.laizi = data
+	if len(data) == 0 {
+		return
+	}
+	for _, item := range data {
+		if item != 0 {
+			p.laizi = append(p.laizi, item)
+		}
+	}
+	logx.Debugf("[SetLaizi] successfully, data: %v", data)
 	for i1 := range data {
 		for i2 := range p.baseCards {
 			if p.baseCards[i2].Value == data[i1] {

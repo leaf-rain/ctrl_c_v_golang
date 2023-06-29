@@ -7,7 +7,8 @@ import (
 func Test_HintCardCombo(t *testing.T) {
 	//p.SetLaizi([]int64{6})
 	var c1 = []int64{81, 91, 101, 111, 121}
-	var a, _, _, _ = p.DecodeFeature(0)
+	var a, _, _, _ = p.DecodeFeature(41040134)
+	t.Log("--->", a)
 	feature := p.GetCardsFeature(c1, a)
 	t.Log(feature)
 
@@ -37,10 +38,11 @@ func Test_HintCardCombo(t *testing.T) {
 }
 
 func TestPoker_GetMinBomb(t *testing.T) {
-	//p.SetLaizi([]int64{6})
+	p.SetLaizi([]int64{7})
 	//var tzz int64 = 41040134
-	cards := p.NumToCard([]int64{31, 32, 41, 42, 51, 52, 61, 62})
-	a, b, c, d := p.isPairStraight(cards)
+	cards := p.NumToCard([]int64{31, 32, 33, 71, 41, 42, 51, 52})
+	a, b, c, d := p.isFourWithTwoPair(cards)
+	//a, b, c, d := p.isBomb(cards)
 	t.Log(p.EncodeFeature(a, int(b), c, d))
 }
 

@@ -5,7 +5,7 @@ import (
 )
 
 func TestPoker_CompareFeature(t *testing.T) {
-	t.Log(p.CompareFeature(1010134, 1010044))
+	t.Log(p.CompareFeature(4010091, 4010084))
 }
 
 func TestPoker_TestFeature(t *testing.T) {
@@ -23,4 +23,8 @@ func TestPoker_GetCardsFeature(t *testing.T) {
 	}
 	var result = p.GetCardsFeature(cards, 0)
 	t.Log(result)
+}
+
+func TestPoker_CompareFeature1(t *testing.T) {
+	t.Log(p.CompareFeature(1010034, 41040031))
 }
