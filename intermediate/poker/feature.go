@@ -1,7 +1,5 @@
 package poker
 
-import "github.com/zeromicro/go-zero/core/logx"
-
 const (
 	LastUnConf int64 = -100 // 上家出牌不符合（游戏bug）
 	Less       int64 = -1   // 出牌比上家小
@@ -20,7 +18,6 @@ const (
 // comboType: 牌的类型
 // return: 牌型特征值
 func (p *Poker) GetCardsFeature(nCards []int64, comboType int64) int64 {
-	logx.Debugf("[GetCardsFeature] (%v, %v), laizi:%+v", nCards, comboType, p.laizi)
 	var length = len(nCards)
 	cards := p.NumToCard(nCards)
 	if comboType != 0 {
