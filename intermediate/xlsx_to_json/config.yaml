@@ -1,0 +1,17 @@
+in_path_xlsx: # 输入xlsx文件路径
+  - "./config/resource/excel"
+out_put_path: # 输出问价位置
+  - "./config/resource/json"
+  - "./config/resource/yaml"
+out_opt_type: # 可选输出格式, 1:json, 2:yaml, 3:golang struct
+  - 1
+  - 2
+golang_package_name: "consts" # 解析后golang的package名称
+columns:
+  - "c"
+  - "s"
+ignore_excel_file:
+  - "广告领豆配置表.xlsx"
+  - "每日签到配置表.xlsx"
+  - "幸运转盘配置表.xlsx"
+
